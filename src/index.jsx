@@ -1,17 +1,17 @@
 import EventEmitter from 'tiny-emitter';
-import WebAnnotation from '@recogito/recogito-client-core/src/WebAnnotation';
+// NOTE: This plugin assumes upstream-serialized annotation objects (W3C/W3CTEI)
+// with a `target` array (two entries) and a `body` array. Compatibility
+// fallbacks for wrappers (e.g. `.underlying`) and plural `bodies` were removed.
 import NetworkCanvas from './NetworkCanvas';
 import mountEditor from './editor/mountEditor';
 
-/** Checks if the given annotation represents a connection **/
+/** Checks if the given annotation represents a connection (upstream W3C shape) **/
 const isConnection = annotation => {
-  const targets = Array.isArray(annotation.target) ?
-    annotation.target : [ annotation.target ];
+  const targets = Array.isArray(annotation.target) ? annotation.target : null;
 
-  if (targets.length !== 2)
-    return false;
+  if (!targets || targets.length !== 2) return false;
 
-  return targets.every(t => t.id);
+  return targets.every(t => t && t.id);
 }
 
 class ConnectionsPlugin extends EventEmitter {
@@ -54,9 +54,14 @@ class ConnectionsPlugin extends EventEmitter {
       
       // Set annotations on instance first
       return _setAnnotations(annotations).then(() => {
-        // Then create relations
-        const wrapped = connections.map(a => new WebAnnotation(a));
-        this.canvas.setAnnotations(wrapped);
+        // Then create relations. Connections are passed as plain serialized
+        // annotation objects (W3C/W3CTEI). Ensure `body` is an array.
+        const normalized = connections.map(a => {
+          const ann = a || {};
+          const body = ann.body || [];
+          return { ...ann, body: Array.isArray(body) ? body : [body] };
+        });
+        this.canvas.setAnnotations(normalized);
       });
     }
 
@@ -65,7 +70,8 @@ class ConnectionsPlugin extends EventEmitter {
     instance.on('deleteAnnotation', annotation => {
       const deleted = this.canvas.deleteConnectionsForId(annotation.id);
       deleted.forEach(annotation => {
-        this.emit('deleteConnection', annotation.underlying);
+        // annotation is a plain serialized object
+        this.emit('deleteConnection', annotation);
       });
     });
   }

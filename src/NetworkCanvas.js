@@ -243,13 +243,35 @@ export default class NetworkCanvas extends EventEmitter {
   }
 
   setAnnotations = annotations => annotations.forEach(a => {
-    const start = NetworkNode.findById(a.targets[0].id);
-    const end = NetworkNode.findById(a.targets[1].id);
+    // Expect upstream-serialized W3C annotations (with `target` and `body`).
+    const ann = a;
+
+    const targets = Array.isArray(ann?.target) ? ann.target : null;
+
+    if (!targets || targets.length < 2) {
+      console.warn('Annotation does not contain two targets:', ann);
+      return;
+    }
+
+    const startId = targets[0].id;
+    const endId = targets[1].id;
+
+    if (!startId || !endId) {
+      console.warn('Targets missing id field:', targets);
+      return;
+    }
+
+    const start = NetworkNode.findById(startId);
+    const end = NetworkNode.findById(endId);
+
     if (!start || !end) {
-      console.warn('Could not find start or end node for annotation', a);
+      console.warn('Could not find start or end node for annotation', ann);
       return; 
     }
-    this.addEdge(new NetworkEdge(a.id, start, end, a.bodies));
+
+    const bodies = ann.body || [];
+
+    this.addEdge(new NetworkEdge(ann.id, start, end, bodies));
   });
 
   unregisterInstance = instance => 
@@ -259,7 +281,13 @@ export default class NetworkCanvas extends EventEmitter {
     const toUpdate = this.connections.find(c =>
       c.edge.matchesAnnotation(connection));
 
-    toUpdate.setData(bodies);
+    if (!toUpdate) {
+      console.warn('Could not find connection to update', connection);
+      return;
+    }
+
+    if (typeof toUpdate.setData === 'function')
+      toUpdate.setData(bodies);
   }
 
 }

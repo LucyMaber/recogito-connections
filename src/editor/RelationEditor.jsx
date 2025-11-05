@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
-import Autocomplete from '@recogito/recogito-client-core/src/editor/widgets/Autocomplete';
-import { TrashIcon, CheckIcon } from '@recogito/recogito-client-core/src/Icons';
+import Autocomplete from './widgets/Autocomplete';
+import { TrashIcon, CheckIcon } from '../Icons';
 
 import './RelationEditor.scss';
 
@@ -40,8 +40,8 @@ export default class PayloadEditor extends Component {
     const top = pos.y + window.scrollY;
     const left = pos.x + window.scrollX;
 
-    const inputValue = 
-      connection.bodies.find(b => b.purpose === 'tagging')?.value || '';
+  const bodies = connection.body || [];
+  const inputValue = bodies.find(b => b.purpose === 'tagging')?.value || '';
 
     const setState = () =>
       this.setState({ connection, top, left, isNew, inputValue });
@@ -62,11 +62,13 @@ export default class PayloadEditor extends Component {
     if (value)
       this.setState({ inputValue });
 
-    const updated = this.state.connection.clone({ body: {
+    // Create an updated plain annotation object (W3C shape)
+    const updated = JSON.parse(JSON.stringify(this.state.connection || {}));
+    updated.body = [{
       type: 'TextualBody',
       value: inputValue,
-      purpose: 'tagging' 
-    }});
+      purpose: 'tagging'
+    }];
 
     if (this.state.isNew)
       this.props.onConnectionCreated(updated);

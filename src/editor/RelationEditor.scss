@@ -1,5 +1,28 @@
-@import '@recogito/recogito-client-core/themes/default/globals/includes/colors';
-@import '@recogito/recogito-client-core/themes/default/globals/includes/mixins';
+// Theme variables (local fallbacks)
+$blueish-white: #f8fbff;
+$lightblue-type: #4a90e2;
+$lightgrey-border: #e1e1e1;
+$ocean: #0064ff;
+$ocean-hover: #0052cc;
+
+// Simple mixins used in this stylesheet
+@mixin box-shadow($x, $y, $blur, $alpha) {
+  box-shadow: $x $y $blur rgba(0,0,0, $alpha);
+}
+
+@mixin rounded-corners($r) {
+  border-radius: $r;
+}
+
+@mixin rounded-corners-left($r) {
+  border-top-left-radius: $r;
+  border-bottom-left-radius: $r;
+}
+
+@mixin rounded-corners-right($r) {
+  border-top-right-radius: $r;
+  border-bottom-right-radius: $r;
+}
 
 .r6o-connections-editor {
   position:absolute;
