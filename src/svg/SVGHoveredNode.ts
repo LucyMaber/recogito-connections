@@ -1,4 +1,5 @@
-import EventEmitter from 'tiny-emitter';
+import { TinyEmitter as EventEmitter } from 'tiny-emitter';
+import { Container } from '@svgdotjs/svg.js';
 
 import { 
   TETHER_LENGTH,
@@ -6,6 +7,7 @@ import {
   HANDLE_SIZE,
   MOUSE_BUFFER
 } from './Config';
+import NetworkNode from '../NetworkNode';
 
 /**
  * A compound SVG shape representing a network node currently
@@ -13,7 +15,12 @@ import {
  */
 export default class SVGHoveredNode extends EventEmitter {
 
-  constructor(node, svg, drawHandle) {
+  node: NetworkNode;
+  drawHandle: boolean;
+  g: Container;
+  eventHandlers: Record<string, any>;
+
+  constructor(node: NetworkNode, svg: Container, drawHandle: boolean) {
     super();
 
     this.node = node;
@@ -65,47 +72,51 @@ export default class SVGHoveredNode extends EventEmitter {
     this.redraw();
   }
   
-  _redrawOutline = () => {
-    this.g.find('.r6o-connections-hover-emphasis').attr('d', this.node.faces.svg());
+  _redrawOutline = (): void => {
+    (this.g.find('.r6o-connections-hover-emphasis') as any).attr('d', (this.node.faces as any)?.svg());
   }
 
-  _redrawHandle = () => {
-    const { x, y, width } = this.node.getAttachableRect();
+  _redrawHandle = (): void => {
+    const attachableRect = this.node.getAttachableRect();
+    if (!attachableRect) return;
+
+    const { x, y, width } = attachableRect;
 
     const cx = Math.round(x + width / 2);
     const cy = Math.round(y);
 
-    this.g.find('.r6o-connections-handle-mousetrap')
+    (this.g.find('.r6o-connections-handle-mousetrap') as any)
       .attr('x', cx - HANDLE_SIZE - MOUSE_BUFFER)
       .attr('y', cy - TETHER_LENGTH - HANDLE_SIZE - MOUSE_BUFFER);
 
-    this.g.find('.r6o-connections-handle-dot')
+    (this.g.find('.r6o-connections-handle-dot') as any)
       .attr('cx', cx)
       .attr('cy', cy + Math.ceil(DOT_SIZE / 2));
 
-    this.g.find('.r6o-connections-handle-tether')
+    (this.g.find('.r6o-connections-handle-tether') as any)
       .attr('x1', cx)
       .attr('y1', cy)
       .attr('x2', cx)
       .attr('y2', cy - TETHER_LENGTH);
 
-    this.g.find('.r6o-connections-handle-inner')
+    (this.g.find('.r6o-connections-handle-inner') as any)
       .attr('cx', cx)
       .attr('cy', cy - TETHER_LENGTH);
 
-    this.g.find('.r6o-connections-handle-outer')
+    (this.g.find('.r6o-connections-handle-outer') as any)
       .attr('cx', cx)
       .attr('cy', cy - TETHER_LENGTH);
   }
 
-  redraw = () => {
+  redraw = (): void => {
     this._redrawOutline();
 
     if (this.drawHandle)
       this._redrawHandle();
   }
 
-  remove = () =>
+  remove = (): void => {
     this.g.remove();
+  }
 
 }

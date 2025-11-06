@@ -1,8 +1,29 @@
-import { serializeW3CTEIAnnotation, serializeW3CTextAnnotation } from '@recogito/react-text-annotator';
+import { serializeW3CTextAnnotation } from '@recogito/text-annotator';
+import NetworkNode from './NetworkNode';
+
+export interface AnnotationBody {
+  type?: string;
+  value?: any;
+  purpose?: string;
+  [key: string]: any;
+}
+
+export interface W3CAnnotation {
+  id: string;
+  body: AnnotationBody[];
+  motivation?: string;
+  target: Array<{ id: string }>;
+  [key: string]: any;
+}
 
 export default class NetworkEdge {
 
-  constructor(id, start, end, bodies) {
+  id: string;
+  start: NetworkNode;
+  end: NetworkNode;
+  bodies: AnnotationBody[];
+
+  constructor(id: string, start: NetworkNode, end: NetworkNode, bodies?: AnnotationBody[]) {
     this.id = id;
 
     this.start = start;
@@ -19,7 +40,7 @@ export default class NetworkEdge {
     }
   }
 
-  matchesAnnotation = annotation => {
+  matchesAnnotation = (annotation: W3CAnnotation): boolean => {
     // Expect a plain, upstream-serialized W3C annotation object.
     const ann = annotation;
 
@@ -34,8 +55,8 @@ export default class NetworkEdge {
     return this.start.annotation.id === start && this.end.annotation.id === end;
   }
 
-  toAnnotation = () => {
-    const raw = {
+  toAnnotation = (): W3CAnnotation => {
+    const raw: W3CAnnotation = {
       id: this.id,
       body: this.bodies,
       motivation: 'linking',
@@ -47,10 +68,9 @@ export default class NetworkEdge {
 
     // Prefer TEI serializer when available, otherwise fall back to generic
     // W3C serializer; if neither available, use the raw object.
-    let serialized = raw;
+    let serialized: W3CAnnotation = raw;
     try {
-      if (typeof serializeW3CTEIAnnotation === 'function') serialized = serializeW3CTEIAnnotation(raw);
-      else if (typeof serializeW3CTextAnnotation === 'function') serialized = serializeW3CTextAnnotation(raw);
+      if (typeof serializeW3CTextAnnotation === 'function') serialized = serializeW3CTextAnnotation(raw as any, '') as any;
     } catch (e) {
       // fall back to raw
       serialized = raw;

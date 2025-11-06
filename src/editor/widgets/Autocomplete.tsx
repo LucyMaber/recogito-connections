@@ -1,31 +1,47 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-const Autocomplete = ({ placeholder, initialValue, onSubmit, onChange, onCancel, vocabulary = [] }) => {
-  const [value, setValue] = useState(initialValue || '');
-  const [highlight, setHighlight] = useState(-1);
-  const containerRef = useRef(null);
+interface AutocompleteProps {
+  placeholder?: string;
+  initialValue?: string;
+  onSubmit?: (value: string) => void;
+  onChange?: (value: string) => void;
+  onCancel?: () => void;
+  vocabulary?: string[];
+}
+
+const Autocomplete: React.FC<AutocompleteProps> = ({
+  placeholder,
+  initialValue,
+  onSubmit,
+  onChange,
+  onCancel,
+  vocabulary = []
+}) => {
+  const [value, setValue] = useState<string>(initialValue || '');
+  const [highlight, setHighlight] = useState<number>(-1);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setValue(initialValue || '');
   }, [initialValue]);
 
-  const suggestions = value
-    ? vocabulary.filter(v => v.toLowerCase().includes(value.toLowerCase())).slice(0, 8)
+  const suggestions: string[] = value
+    ? vocabulary.filter((v: string) => v.toLowerCase().includes(value.toLowerCase())).slice(0, 8)
     : vocabulary.slice(0, 8);
 
-  const handleChange = e => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const v = e.target.value;
     setValue(v);
     setHighlight(-1);
     onChange && onChange(v);
   }
 
-  const commit = val => {
+  const commit = (val?: string): void => {
     const out = (typeof val === 'string') ? val : value;
     if (out && out.trim().length > 0) onSubmit && onSubmit(out.trim());
   };
 
-  const handleKeyDown = e => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Enter') {
       if (highlight >= 0 && suggestions[highlight]) {
         commit(suggestions[highlight]);
@@ -36,19 +52,19 @@ const Autocomplete = ({ placeholder, initialValue, onSubmit, onChange, onCancel,
     } else if (e.key === 'Escape') {
       onCancel && onCancel();
     } else if (e.key === 'ArrowDown') {
-      setHighlight(h => Math.min(h + 1, suggestions.length - 1));
+      setHighlight((h: number) => Math.min(h + 1, suggestions.length - 1));
       e.preventDefault();
     } else if (e.key === 'ArrowUp') {
-      setHighlight(h => Math.max(h - 1, 0));
+      setHighlight((h: number) => Math.max(h - 1, 0));
       e.preventDefault();
     }
   }
 
   // Close suggestions when clicking outside
   useEffect(() => {
-    const onDoc = e => {
+    const onDoc = (e: MouseEvent): void => {
       if (!containerRef.current) return;
-      if (!containerRef.current.contains(e.target)) {
+      if (!containerRef.current.contains(e.target as Node)) {
         setHighlight(-1);
       }
     };
@@ -71,13 +87,13 @@ const Autocomplete = ({ placeholder, initialValue, onSubmit, onChange, onCancel,
       />
       {suggestions.length > 0 && (
         <ul role="listbox" aria-label="Suggestions">
-          {suggestions.map((v, i) => (
+          {suggestions.map((v: string, i: number) => (
             <li
               role="option"
               aria-selected={highlight === i}
               key={i}
               className={highlight === i ? 'highlight' : ''}
-              onMouseDown={(ev) => { ev.preventDefault(); commit(v); }}
+              onMouseDown={(ev: React.MouseEvent) => { ev.preventDefault(); commit(v); }}
               onMouseEnter={() => setHighlight(i)}
             >
               {v}

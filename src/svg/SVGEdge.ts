@@ -1,7 +1,15 @@
 import { getBoxToBoxArrow } from 'perfect-arrows';
-import EventEmitter from 'tiny-emitter';
+import { TinyEmitter as EventEmitter } from 'tiny-emitter';
+import { Container } from '@svgdotjs/svg.js';
 
 import { ARROW_CONFIG } from './Config';
+import NetworkEdge, { AnnotationBody } from '../NetworkEdge';
+import { NetworkCanvasConfig } from '../NetworkCanvas';
+
+export interface Point {
+  x: number;
+  y: number;
+}
 
 /**
  * A compound SVG shape representing an existing network 
@@ -9,7 +17,14 @@ import { ARROW_CONFIG } from './Config';
  */
 export default class SVGEdge extends EventEmitter {
 
-  constructor(edge, svg, config) {
+  edge: NetworkEdge;
+  config: NetworkCanvasConfig;
+  g: Container;
+  startpoint: Point | null = null;
+  midpoint: Point | null = null;
+  endpoint: Point | null = null;
+
+  constructor(edge: NetworkEdge, svg: Container, config: NetworkCanvasConfig) {
     super();
 
     this.edge = edge;
@@ -49,7 +64,8 @@ export default class SVGEdge extends EventEmitter {
         .attr('style', 'display: none');
 
       label.rect();
-      label.text().attr('y', 4.5);
+      const text = label.element('text');
+      (text as any).attr('y', 4.5);
 
 
       this.updateLabel();
@@ -59,12 +75,12 @@ export default class SVGEdge extends EventEmitter {
     this.redraw();
   }
 
-  updateLabel = () => {
-    const label = this.g.find('.r6o-connections-edge-label');
+  updateLabel = (): void => {
+    const label = this.g.find('.r6o-connections-edge-label') as any;
 
     // Note that firstTag will be null if this as newly-dragged connection!
     const firstTag = this.edge.bodies
-      .find(b => b.purpose === 'tagging')?.value;
+      .find((b: AnnotationBody) => b.purpose === 'tagging')?.value;
   
     if (label && firstTag) {
       const text = label.find('text').text(firstTag);
@@ -72,7 +88,7 @@ export default class SVGEdge extends EventEmitter {
       setTimeout(() => {
         const { width, height } = text[0][0].node.getBBox();
 
-        label.find('rect')
+        (label.find('rect') as any)
         .attr('x', -5.5)
         .attr('y', - Math.round(height / 2) - 1.5)
         .attr('rx', 2)
@@ -87,7 +103,7 @@ export default class SVGEdge extends EventEmitter {
     }
   }
 
-  redraw = () => {
+  redraw = (): void => {
     let start = this.edge.start.getAttachableRect();
     const end = start ? this.edge.end.getAttachableRect(start) : null;
     start = end ? this.edge.start.getAttachableRect(end) : null;
@@ -114,20 +130,20 @@ export default class SVGEdge extends EventEmitter {
     const endAngleAsDegrees = ae * (180 / Math.PI);
 
     // Base circle
-    this.g.find('circle')
+    (this.g.find('circle') as any)
       .attr('cx', sx)
       .attr('cy', sy);
 
     // Inner and outer paths
-    this.g.find('path')
+    (this.g.find('path') as any)
       .attr('d', `M${sx},${sy} Q${cx},${cy} ${ex},${ey}`);
 
     // Arrow head
-    this.g.find('polygon')
+    (this.g.find('polygon') as any)
       .attr('transform', `translate(${ex},${ey}) rotate(${endAngleAsDegrees})`);
 
     // Label (if any)
-    const label = this.g.find('.r6o-connections-edge-label');
+    const label = this.g.find('.r6o-connections-edge-label') as any;
     if (label)
       label.attr('transform', `translate(${cx},${cy})`);
 
@@ -137,15 +153,16 @@ export default class SVGEdge extends EventEmitter {
     this.endpoint = { x: ex, y: ey };
   }
 
-  resetAttachment = () => {
+  resetAttachment = (): void => {
     this.edge.start.resetAttachment();
     this.edge.end.resetAttachment();
   }
 
-  remove = () => 
+  remove = (): void => {
     this.g.remove();
+  }
 
-  setData = bodies => {
+  setData = (bodies: AnnotationBody[]): void => {
     this.edge.bodies = bodies;
   
     if (this.config.showLabels)
@@ -153,3 +170,4 @@ export default class SVGEdge extends EventEmitter {
   }
 
 }
+

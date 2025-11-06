@@ -1,8 +1,8 @@
-import { SVG } from '@svgdotjs/svg.js';
-import EventEmitter from 'tiny-emitter';
+import { SVG, Container } from '@svgdotjs/svg.js';
+import { TinyEmitter as EventEmitter } from 'tiny-emitter';
 import { v4 as uuid } from 'uuid';
 
-import NetworkEdge from './NetworkEdge';
+import NetworkEdge, { W3CAnnotation, AnnotationBody } from './NetworkEdge';
 import NetworkNode from './NetworkNode';
 import SVGEdge from './svg/SVGEdge';
 import SVGFloatingEdge from './svg/SVGFloatingEdge';
@@ -10,18 +10,37 @@ import SVGHoveredNode from './svg/SVGHoveredNode';
 
 import './NetworkCanvas.scss';
 
+export interface AnnotoriousInstance {
+  setAnnotations(annotations: W3CAnnotation[]): Promise<void>;
+  on(event: string, handler: (annotation: W3CAnnotation) => void): void;
+  disableSelect: boolean;
+}
+
+export interface NetworkCanvasConfig {
+  showLabels?: boolean;
+  vocabulary?: string[];
+  disableEditor?: boolean;
+}
+
 /** Checks if the given DOM element represents an annotation **/
-const isAnnotation = element =>
+const isAnnotation = (element: Element) =>
   element.classList?.contains('r6o-annotation') ||
   element.closest('.a9s-annotation');
 
 /** Checks if the given DOM element is a connection handle **/
-const isHandle = element =>
+const isHandle = (element: Element | null) =>
   element?.closest && element.closest('.r6o-connections-hover');
 
 export default class NetworkCanvas extends EventEmitter {
 
-  constructor(instances, config) {
+  instances: AnnotoriousInstance[];
+  config: NetworkCanvasConfig;
+  svg: Container;
+  connections: SVGEdge[];
+  currentHover: SVGHoveredNode | null;
+  currentFloatingEdge: SVGFloatingEdge | null;
+
+  constructor(instances: AnnotoriousInstance[], config: NetworkCanvasConfig) {
     super();
 
     // List of RecogitoJS/Annotorious instances
@@ -43,7 +62,7 @@ export default class NetworkCanvas extends EventEmitter {
     this.currentFloatingEdge = null;
   }
 
-  addEdge = edge => {
+  addEdge = (edge: NetworkEdge): SVGEdge => {
     const svgEdge = new SVGEdge(edge, this.svg, this.config);
 
     svgEdge.on('click', () =>
@@ -57,15 +76,15 @@ export default class NetworkCanvas extends EventEmitter {
    * Deletes all connections connected to the annotation
    * with the given ID. Returns the deleted connections.
    */
-  deleteConnectionsForId = id => {
-    const toDelete = this.connections.filter(conn => {
+  deleteConnectionsForId = (id: string): W3CAnnotation[] => {
+    const toDelete = this.connections.filter((conn: SVGEdge) => {
       const start = conn.edge.start.annotation.id;
       const end = conn.edge.end.annotation.id;
       return start === id || end === id;
     });
 
     // Delete connections marked for deletion
-    this.connections = this.connections.filter(conn => {      
+    this.connections = this.connections.filter((conn: SVGEdge) => {      
       const markedForDelete = toDelete.includes(conn);
       if (markedForDelete)
         conn.remove();
@@ -73,30 +92,30 @@ export default class NetworkCanvas extends EventEmitter {
       return !markedForDelete;
     });
 
-    return toDelete.map(conn => conn.edge.toAnnotation());
+    return (toDelete.map((conn: SVGEdge) => conn.edge.toAnnotation()) as W3CAnnotation[]);
   }
 
-  destroy = () => {
+  destroy = (): void => {
     this.svg.remove();
   }
 
-  initGlobalEvents = () => {
+  initGlobalEvents = (): void => {
     const opts = {
       capture: true,
       passive: true
     }
 
-    document.addEventListener('mouseover', evt => {
-      if (isAnnotation(evt.target))
-        this.onEnterAnnotation(evt);
+    document.addEventListener('mouseover', (evt: MouseEvent) => {
+      if (isAnnotation(evt.target as Element))
+        this.onEnterAnnotation(evt as MouseEvent);
     }, opts);
 
-    document.addEventListener('mouseout', evt => {
-      if (isAnnotation(evt.target)) {
+    document.addEventListener('mouseout', (evt: MouseEvent) => {
+      if (isAnnotation(evt.target as Element)) {
         // Note: entering the connection handle will also cause  a
         // mouseleave event for the annotation!
-        if (!isHandle(evt.relatedTarget))
-          this.onLeaveAnnotation(evt.target.annotation); 
+        if (!isHandle(evt.relatedTarget as Element))
+          this.onLeaveAnnotation();
       }
     });
 
@@ -111,7 +130,7 @@ export default class NetworkCanvas extends EventEmitter {
 
     document.addEventListener('mousemove', this.onMouseMove);
 
-    document.addEventListener('keyup', evt => {
+    document.addEventListener('keyup', (evt: KeyboardEvent) => {
       if (evt.code === 'Escape' && this.currentFloatingEdge)
         this.onCancelConnection(); 
     });
@@ -122,11 +141,12 @@ export default class NetworkCanvas extends EventEmitter {
       const resizeObserver = new ResizeObserver(() =>
         this.redraw(true));
 
-      resizeObserver.observe(this.svg.node.parentNode);
+      if (this.svg.node.parentNode instanceof Element)
+        resizeObserver.observe(this.svg.node.parentNode);
     }
 
-    this.instances.forEach(instance => {
-      instance.on('changeSelectionTarget', target => {
+    this.instances.forEach((instance: AnnotoriousInstance) => {
+      instance.on('changeSelectionTarget', (_target: W3CAnnotation) => {
         // TODO only redraw if the target has connections!
         // TODO only redraw affected connections
         this.redraw();
@@ -134,26 +154,26 @@ export default class NetworkCanvas extends EventEmitter {
     });
   }
 
-  initHoverEvents = hover => {
+  initHoverEvents = (hover: SVGHoveredNode): void => {
     hover.on('startConnection', () => this.onStartConnection(hover.node));
     hover.on('mouseout', this.onLeaveAnnotation);
   }
 
-  onCancelConnection = () => {
-    this.currentFloatingEdge.remove();
+  onCancelConnection = (): void => {
+    this.currentFloatingEdge!.remove();
     this.currentFloatingEdge = null;
 
-    this.instances.forEach(i => i.disableSelect = false);
+    this.instances.forEach((i: AnnotoriousInstance) => i.disableSelect = false);
 
     document.body.classList.remove('r6o-hide-cursor');
   }
 
-  onCompleteConnection = () => {
-    const { start, end } = this.currentFloatingEdge;
+  onCompleteConnection = (): void => {
+    const { start, end } = this.currentFloatingEdge!;
 
     const id = `#${uuid()}`;
 
-    const edge = new NetworkEdge(id, start, end);
+    const edge = new NetworkEdge(id, start as NetworkNode, end as NetworkNode);
 
     const annotation = edge.toAnnotation();
 
@@ -161,11 +181,11 @@ export default class NetworkCanvas extends EventEmitter {
 
     this.emit('createConnection', annotation, svgEdge.midpoint);
     
-    setTimeout(() => this.instances.forEach(i => i.disableSelect = false), 100);
+    setTimeout(() => this.instances.forEach((i: AnnotoriousInstance) => i.disableSelect = false), 100);
 
     document.body.classList.remove('r6o-hide-cursor');
 
-    this.currentFloatingEdge.remove();
+    this.currentFloatingEdge!.remove();
     this.currentFloatingEdge = null;
   }
 
@@ -174,8 +194,8 @@ export default class NetworkCanvas extends EventEmitter {
    * dragged arrow, show connection handle. If there is a dragged 
    * arrow, snap it.
    */
-  onEnterAnnotation = evt => {
-    const annotation = evt.target?.annotation || evt.target.closest('.a9s-annotation')?.annotation;
+  onEnterAnnotation = (evt: MouseEvent): void => {
+    const annotation = (evt.target as any)?.annotation || (evt.target as any).closest('.a9s-annotation')?.annotation;
     const { clientX, clientY } = evt;
 
     // Destroy previous hover, if any
@@ -195,12 +215,12 @@ export default class NetworkCanvas extends EventEmitter {
       this.currentFloatingEdge.snapTo(node);
   }
 
-  onLeaveAnnotation = () =>  {
+  onLeaveAnnotation = (): void => {
     this.currentHover?.remove();
     this.currentHover = null;
   }
 
-  onMouseMove = evt => {
+  onMouseMove = (evt: MouseEvent): void => {
     // If there is a current floating edge and it's not snapped, 
     // drag it to mouse position
     if (this.currentFloatingEdge) {
@@ -213,36 +233,37 @@ export default class NetworkCanvas extends EventEmitter {
     }
   }
 
-  onStartConnection = node => {
+  onStartConnection = (node: NetworkNode): void => {
     this.currentFloatingEdge = new SVGFloatingEdge(node, this.svg);
 
     // Disable selection on RecogitoJS/Annotorious
-    this.instances.forEach(i => i.disableSelect = true);
+    this.instances.forEach((i: AnnotoriousInstance) => i.disableSelect = true);
   }
 
-  redraw = reflow => {
+  redraw = (reflow?: boolean): void => {
     if (this.currentHover)
       this.currentHover.redraw();
 
     if (reflow)
-      this.connections.forEach(connection => connection.resetAttachment());
+      this.connections.forEach((connection: SVGEdge) => connection.resetAttachment());
 
-    this.connections.forEach(connection => connection.redraw());
+    this.connections.forEach((connection: SVGEdge) => connection.redraw());
   }
 
-  registerInstance = instance =>
+  registerInstance = (instance: AnnotoriousInstance): void => {
     this.instances.push(instance);
+  }
 
-  removeConnection = connection => {
-    const toRemove = this.connections.find(c => 
+  removeConnection = (connection: W3CAnnotation): void => {
+    const toRemove = this.connections.find((c: SVGEdge) => 
       c.edge.matchesAnnotation(connection));
 
-    this.connections = this.connections.filter(c => c !== toRemove);
+    this.connections = this.connections.filter((c: SVGEdge) => c !== toRemove);
     
-    toRemove.remove();
+    toRemove?.remove();
   }
 
-  setAnnotations = annotations => annotations.forEach(a => {
+  setAnnotations = (annotations: W3CAnnotation[]): void => annotations.forEach((a: W3CAnnotation) => {
     // Expect upstream-serialized W3C annotations (with `target` and `body`).
     const ann = a;
 
@@ -274,11 +295,12 @@ export default class NetworkCanvas extends EventEmitter {
     this.addEdge(new NetworkEdge(ann.id, start, end, bodies));
   });
 
-  unregisterInstance = instance => 
-    this.instances = this.instances.filter(i => i !== instance);
+  unregisterInstance = (instance: AnnotoriousInstance): void => {
+    this.instances = this.instances.filter((i: AnnotoriousInstance) => i !== instance);
+  }
 
-  updateConnectionData = (connection, bodies) => {
-    const toUpdate = this.connections.find(c =>
+  updateConnectionData = (connection: W3CAnnotation, bodies: AnnotationBody[]): void => {
+    const toUpdate = this.connections.find((c: SVGEdge) =>
       c.edge.matchesAnnotation(connection));
 
     if (!toUpdate) {

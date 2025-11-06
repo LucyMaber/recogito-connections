@@ -1,7 +1,24 @@
-import { BooleanOperations, Box, Point, Polygon } from '@flatten-js/core';
+import { BooleanOperations, Box, Point, Polygon, Face } from '@flatten-js/core';
+
+export interface Annotation {
+  id: string;
+  [key: string]: any;
+}
+
+export interface Point2D {
+  x: number;
+  y: number;
+}
+
+export interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 /** Returns the bounding box of the given polygon face **/
-const getFaceBounds = face => {
+const getFaceBounds = (face: Face): Rect => {
   const { xmin, ymin, xmax, ymax } = face.box;
   return {
     x: xmin,
@@ -12,10 +29,10 @@ const getFaceBounds = face => {
 }
 
 /**  Merges N (multi-)polygons into one **/
-const mergePolygons = polygons => {
+const mergePolygons = (polygons: Polygon[]): Polygon => {
   const [ first, ...rest ] = polygons;
 
-  return rest.reduce((merged, next) => {
+  return rest.reduce((merged: Polygon, next: Polygon) => {
     return BooleanOperations.unify(merged, next);
   }, first);
 }
@@ -27,6 +44,9 @@ const mergePolygons = polygons => {
  */
 export default class NetworkNode {
 
+  annotation: Annotation;
+  xy?: Point2D;
+
   /**
    * Instantiates a network node from an annotation and an
    * optional 'preferred coordinate'. Annotations can be multipolygons
@@ -34,7 +54,7 @@ export default class NetworkNode {
    * The preferred coordinate indicates which sub-element should
    * be used for rendering handles or connections.
    */
-  constructor(annotation, optXY) {
+  constructor(annotation: Annotation, optXY?: Point2D) {
     // The annotation underlying this network node
     this.annotation = annotation;
 
@@ -53,20 +73,21 @@ export default class NetworkNode {
    * text annotation would be a single span, but consist of multiple
    * rectangle faces!
    */
-  get faces () {
+  get faces (): Face[] | null {
     // All DOM rects associated with all elements
-    const rects = [];
+    const rects: DOMRect[] = [];
 
-    for (let element of document.querySelectorAll(`*[data-id="${this.annotation.id}"]`)) {
-      for (let rect of element.getClientRects()) {
+    const elements = document.querySelectorAll(`*[data-id="${this.annotation.id}"]`);
+    for (let element of Array.from(elements)) {
+      for (let rect of Array.from(element.getClientRects())) {
         rects.push(rect);
       }
     }
 
     // Merge all client-rects to one multi-polygon
-    return rects.length > 0 ? mergePolygons(rects
-      .filter(rect => rect.width > 0 && rect.height > 0)
-      .map(rect => {
+    return rects.length > 0 ? (mergePolygons(rects
+      .filter((rect: DOMRect) => rect.width > 0 && rect.height > 0)
+      .map((rect: DOMRect) => {
       const { x, y, width, height } = rect;
 
       return new Polygon([
@@ -75,21 +96,21 @@ export default class NetworkNode {
         new Point(x + width, y + height),
         new Point(x, y + height)
       ]); 
-    })).faces : null;
+    })) as any).faces : null;
   }
 
   /**
    * Returns the multipolygon face intersecting the given point.
    */
-  getFaceUnderPoint = xy => {
+  getFaceUnderPoint = (xy: Point2D): Face | undefined => {
     // From the multipolygon, find the face that's currently
     // under the given coordinate
     const box = new Box(xy.x - 1, xy.y - 1, xy.x + 1, xy.y + 1);
-    const [ intersecting, ] = this.faces?.search(box) || [];
+    const [ intersecting, ] = (this.faces as any)?.search(box) || [];
     return intersecting;
   }
 
-  getAttachableRect = optReference => {
+  getAttachableRect = (optReference?: Rect): Rect | undefined => {
     // Just a bit of defensive programming - users
     // might deregister an instance, and then there wouldn't
     // be any faces for a node.
@@ -111,10 +132,10 @@ export default class NetworkNode {
       // Compute distance between the reference shape and each face
       const a = new Polygon(new Box(x, y, x + width, y + height));
       
-      const sorted = faces.map(face => {
+      const sorted = faces.map((face: Face) => {
         const [ distance, ] = new Polygon(face.shapes).distanceTo(a);
         return { face, distance }; 
-      }).sort((a,b) => a.distance - b.distance);
+      }).sort((a, b) => a.distance - b.distance);
 
       return getFaceBounds(sorted[0].face);
     } else {
@@ -122,14 +143,14 @@ export default class NetworkNode {
     }
   }
 
-  resetAttachment = () => 
-    this.xy = null;
+  resetAttachment = (): void => 
+    this.xy = undefined;
 
-}
+  static findById = (id: string): NetworkNode | undefined => {
+    const annotationElement = document.querySelector(`*[data-id="${id}"]`) as any;
+    const annotation = annotationElement?.annotation;
 
-NetworkNode.findById = id => {
-  const annotation = document.querySelector(`*[data-id="${id}"]`)?.annotation;
-
-  if (annotation)
-    return new NetworkNode(annotation);
+    if (annotation)
+      return new NetworkNode(annotation);
+  }
 }
